@@ -1,0 +1,7 @@
+numpy
+astropy
+opencv-python
+matplotlib
+pandas
+pyyaml
+pytest

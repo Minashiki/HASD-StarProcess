@@ -1,0 +1,43 @@
+# 论文默认参数配置（HASD-StarNet 预处理复现）
+# 标注约定：paper-confirmed / engineering-choice / reconstruction-assumption
+
+data:
+  fits_dir: rst19                 # engineering-choice: 数据目录
+  roi_file: data/roi/roi.yaml     # engineering-choice: ROI 配置路径
+
+bilateral:
+  # paper-confirmed: k=5, sigma_space=1.5, sigma_range=25
+  kernel_size: 5
+  sigma_space: 1.5
+  sigma_range: 25
+  # paper-confirmed: 论文给出 diameter 与 radius 两种核定义均支持
+  kernel_definition: diameter     # diameter: 5x5 主实验; radius: 11x11 对照
+  # engineering-choice: 论文 sigma_range=25 隐含 [0,255] 灰度尺度，
+  # 而滤波作用于拉伸前的原始数据，需按动态范围缩放 sigma_range
+  sigma_range_scale_to_dynamic_range: true
+
+contrast_stretch:
+  # paper-confirmed: min-max 线性拉伸到 [0,255]
+  method: minmax
+  out_min: 0
+  out_max: 255
+
+local_background:
+  # paper-confirmed: 20x20 分块统计
+  block_size: 20
+
+adaptive_threshold:
+  # reconstruction-assumption: 论文未给出显式二值化判决式
+  # 候选: "mu+S" | "mu+C*S" | "mu+C*sigma_loc"
+  strategy: mu+C*S
+  C: 1.5                          # 参考论文 1.2.1 节 C=1.5
+
+morphology:
+  # reconstruction-assumption: 论文未给出形态学参数
+  op: open                        # none/open/close/erode/dilate/open+close
+  kernel_shape: ellipse
+  kernel_size: 3                  # 禁止 5x5 起步
+  iterations: 1
+
+output:
+  dir: outputs                    # engineering-choice

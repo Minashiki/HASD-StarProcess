@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Data & outputs (large)
+rst19/
+outputs/
+ref/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+description: 'SNR 参考 ROI。reconstruction-assumption: 序列中未发现明显的暗弱点状动目标（frame1 顶部的亮条带为卫星尾迹，且仅出现于单帧），按
+  implementation_plan P0 的备选方案选一颗孤立的中等亮度恒星。若拿到目标真值坐标可直接替换本文件。'
+reference_frame: 20260330163205413_9901.fits
+target:
+  x: 1448
+  y: 1636
+  radius: 5
+background_annulus:
+  inner_radius: 10
+  outer_radius: 20
