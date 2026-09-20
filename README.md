@@ -42,6 +42,18 @@ conda run -n HASD-StarNet python scripts/run_preprocess.py --config config/paper
 conda run -n HASD-StarNet python -m pytest tests/
 ```
 
+## 进度
+
+- **P0 环境与工程**（完成）：目录结构、配置、FITS 读取（`src/image_io.py`）、ROI 选取。
+- **P1 双边滤波**（完成）：`src/bilateral_filter.py`（cv2.bilateralFilter，diameter/radius
+  两种核定义，σr 按帧动态范围缩放）、`src/metrics.py`（SNR=|m−m_b|/σ_b）、
+  `src/visualization.py`、`src/pipeline.py` 骨架、`scripts/run_preprocess.py`。
+  参考帧验收：SNR 17.61 → 43.37（+146.25%），目标均值 202.4 → 199.0（保留），
+  背景 σ 10.31 → 4.11。输出 `outputs/debug/01_original.png`、`outputs/filtered/02_bilateral.png`。
+
+显示归一化说明（engineering-choice）：PNG 落盘用 0.5%/99.5% 百分位拉伸
+（±32768 量级坏点会使全局 min-max 把星点压到不可见）；管线内数据不受影响。
+
 ## ROI
 
 `data/roi/roi.yaml`：SNR 参考 ROI，target=(1448, 1636, r=5)，背景环 inner=10 / outer=20。
