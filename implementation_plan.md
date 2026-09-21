@@ -56,7 +56,7 @@ tests/
   test_bilateral.py
   test_background.py
   test_metrics.py
-outputs/                # filtered/ binary/ morphology/ debug/ figures/ metrics/（gitignore）
+outputs/                # 按阶段命名：p0_debug/ p1_bilateral/ p2_grid_search/ p3_stretch_background/ p4_binary_morphology/（gitignore）
 ```
 
 ## 三、依赖（requirements.txt）
@@ -78,18 +78,18 @@ outputs/                # filtered/ binary/ morphology/ debug/ figures/ metrics/
 
 - 配置：`kernel_size: 5, sigma_space: 1.5, sigma_range: 25, kernel_definition: diameter`（5×5 主实验；radius 模式即 11×11 对照）。
 - 注意 σr=25 是 [0,255] 尺度下的值，而论文流程中滤波在拉伸之前——float 原始数据需按动态范围缩放 σr（可配置），此属 engineering-choice，需在代码和 README 记录。
-- 验收：输出 `outputs/filtered/02_bilateral.png`，打印 SNR(before/after)。
+- 验收：输出 `outputs/p1_bilateral/02_bilateral.png`，打印 SNR(before/after)。
 
 ### P2 网格搜索（scripts/grid_search_bilateral.py）
 
-- k∈{3,5,7} × σs∈{0.5..2.5} × σr∈{10..30}（diameter 模式），逐组合算 SNR，写 `outputs/metrics/grid_search.csv`，取 SNR 最大组合与论文 (5,1.5,25) 对照。
+- k∈{3,5,7} × σs∈{0.5..2.5} × σr∈{10..30}（diameter 模式），逐组合算 SNR，写 `outputs/p2_grid_search/grid_search.csv`，取 SNR 最大组合与论文 (5,1.5,25) 对照。
 - 另跑 radius（11×11）模式关键组合作对照，辅助判断论文 k=5 的真实含义。
 - 4096×4096 大图 × 45 组合较慢：以单帧跑，必要时裁剪 ROI 加速（engineering-choice，写明）。
 
 ### P3 对比度拉伸 + 局部背景模型
 
 - min-max → [0,255]（paper-faithful，不用 CLAHE/percentile）。
-- 20×20 块：μloc/σloc 图、σglo、S_map；存 `outputs/debug/04_local_mean.png, 05_local_std.png, 06_S_map.png`。
+- 20×20 块：μloc/σloc 图、σglo、S_map；存 `outputs/p3_stretch_background/04_local_mean.png, 05_local_std.png, 06_S_map.png`。
 
 ### P4 自适应二值化 + 形态学
 

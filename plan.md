@@ -299,9 +299,9 @@ S_map
 建议输出：
 
 ```text
-outputs/debug/local_mean.png
-outputs/debug/local_std.png
-outputs/debug/adaptive_score.png
+outputs/p3_stretch_background/local_mean.png
+outputs/p3_stretch_background/local_std.png
+outputs/p3_stretch_background/adaptive_score.png
 ```
 
 这样能够直观看论文背景模型对星点、亮星和背景噪声分别有什么响应。

@@ -35,6 +35,12 @@ conda run -n HASD-StarNet pip install -r requirements.txt
 见 `implementation_plan.md` 第二节。`src/` 为预处理模块，`scripts/` 为实验脚本，
 `tests/` 为单元测试，`outputs/`（gitignore）存放中间图与指标。
 
+`outputs/` 下按阶段命名子目录：`p0_debug/`（P0 选 ROI 辅助图）、
+`p1_bilateral/`（01–02）、`p3_stretch_background/`（03–06）、
+`p4_binary_morphology/`（07–09）、`p2_grid_search/`（P2 网格搜索 CSV）。
+`--out` 指定自定义输出根目录（如 `outputs/test1`）时，其下也按同样的
+p 阶段子目录结构生成。
+
 ## 运行
 
 ```bash
@@ -54,12 +60,13 @@ GBK 打印报 UnicodeEncodeError。
   两种核定义，σr 按帧动态范围缩放）、`src/metrics.py`（SNR=|m−m_b|/σ_b）、
   `src/visualization.py`、`src/pipeline.py` 骨架、`scripts/run_preprocess.py`。
   参考帧验收：SNR 17.61 → 43.37（+146.25%），目标均值 202.4 → 199.0（保留），
-  背景 σ 10.31 → 4.11。输出 `outputs/debug/01_original.png`、`outputs/filtered/02_bilateral.png`。
+  背景 σ 10.31 → 4.11。输出 `outputs/p1_bilateral/01_original.png`、
+  `outputs/p1_bilateral/02_bilateral.png`。
 - **P2 网格搜索**（完成）：`scripts/grid_search_bilateral.py`，论文网格
   k∈{3,5,7} × σs∈{0.5..2.5} × σr∈{10..30}（3×5×5=75 组，diameter 模式）
   + radius 模式（k=5 → 11×11）25 组对照，单帧 ROI 中心 1024×1024 裁剪加速
   （engineering-choice：σr_eff 按子图动态范围缩放，结论用于参数排序）。
-  输出 `outputs/metrics/grid_search.csv`、`grid_search_radius.csv`。
+  输出 `outputs/p2_grid_search/grid_search.csv`、`grid_search_radius.csv`。
   结果（SNR_before=17.61）：
   - diameter：论文参数 (5, 1.5, 25) SNR=43.32（+145.93%）；网格最优 (7, 2.5, 30)
     SNR=60.09（+241.17%），SNR 随 k/σs/σr 增大单调上升，最优落在网格边界。
@@ -80,6 +87,33 @@ GBK 打印报 UnicodeEncodeError。
   把有效信号压缩到很窄灰度区间（背景 σ 仅 0.02/255），S_map 仍能正常
   分离星点块（见 `06_S_map.png`），后续 P4 阈值在此窄区间数据上按
   相对统计量工作。
+- **P4 自适应二值化 + 形态学**（完成）：`src/adaptive_threshold.py`
+  （三种候选策略 `mu+S` / `mu+C*S` / `mu+C*sigma_loc`，判决 image ≥ T，
+  全部 reconstruction-assumption）、`src/morphology.py`
+  （none/open/close/erode/dilate/open+close，默认 open, ellipse, 3×3,
+  iter 1，禁止 5×5 起步）、`src/metrics.py` 追加 `detection_metrics`
+  （星点能量保留率 + 背景噪点数，engineering-choice：能量保留率 =
+  目标圆盘内前景保留的灰度能量占比；噪点数 = 8 连通前景连通域中与
+  目标圆盘不相交的个数）。输出 `07_binary.png`、`08_morphology.png`、
+  `09_final.png`（前景掩膜红色叠加，BGR，engineering-choice）。
+  参考帧策略对照（open 3×3 形态学后）：
+
+  | 策略 | C | 能量保留率 | 背景噪点数 | 前景像素 |
+  |---|---|---|---|---|
+  | mu+S | – | 0.275 | 111853 | 3787955 |
+  | mu+C*S（默认） | 1.5 | 0.213 | 111267 | 3640736 |
+  | mu+C*S | 3.0 | 0.201 | 109632 | 3293799 |
+  | mu+C*S | 5.0 | 0.101 | 107764 | 2950852 |
+  | mu+C*sigma_loc | 1.5 | 0.213 | 52797 | 618655 |
+  | mu+C*sigma_loc | 3.0 | 0.101 | 29185 | 241774 |
+  | mu+C*sigma_loc | 5.0 | 0.063 | 10674 | 58381 |
+
+  结论：退化拉伸下 S 在平坦块趋近 0（T≈μloc，块内约半数像素过阈值），
+  故 S 系策略前景/噪点量级很大；`mu+C*sigma_loc` C=1.5 在与默认策略
+  相同的能量保留率（0.213）下噪点数减半、前景像素减至 1/6。按 plan
+  规定配置默认仍为 `mu+C*S`，最终策略留待 P5 四组实验综合判定。
+  噪点绝对量级（10⁴–10⁵）主要源于 ±32768 坏点经双边滤波保边残留
+  与背景 σ 被压缩至 0.02/255 的叠加效应。
 
 显示归一化说明（engineering-choice）：PNG 落盘用 0.5%/99.5% 百分位拉伸
 （±32768 量级坏点会使全局 min-max 把星点压到不可见）；管线内数据不受影响。

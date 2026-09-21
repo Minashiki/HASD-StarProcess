@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.makedirs("data/roi", exist_ok=True)
-os.makedirs("outputs/debug", exist_ok=True)
+os.makedirs("outputs/p0_debug", exist_ok=True)
 warnings.filterwarnings("ignore")
 
 import cv2
@@ -79,5 +79,5 @@ for rr, c, lb in [(5, "r", "target"), (10, "y", "bg inner"), (20, "g", "bg outer
 ax.legend()
 ax.set_title(f"ROI star ({sx},{sy})")
 plt.tight_layout()
-plt.savefig("outputs/debug/p0_roi.png", dpi=90)
-print("saved outputs/debug/p0_roi.png")
+plt.savefig("outputs/p0_debug/p0_roi.png", dpi=90)
+print("saved outputs/p0_debug/p0_roi.png")

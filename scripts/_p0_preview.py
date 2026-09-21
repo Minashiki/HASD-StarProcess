@@ -5,7 +5,7 @@ import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-os.makedirs("outputs/debug", exist_ok=True)
+os.makedirs("outputs/p0_debug", exist_ok=True)
 
 warnings.filterwarnings("ignore")
 
@@ -42,6 +42,6 @@ axes[2].set_title("|diff| f15-f1")
 for ax in axes:
     ax.axis("off")
 plt.tight_layout()
-plt.savefig("outputs/debug/p0_overview.png", dpi=80)
-print("saved outputs/debug/p0_overview.png")
+plt.savefig("outputs/p0_debug/p0_overview.png", dpi=80)
+print("saved outputs/p0_debug/p0_overview.png")
 print("diff p99.9:", np.percentile(dm, 99.9), "diff max:", dm.max())

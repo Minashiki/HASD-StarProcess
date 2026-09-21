@@ -4,7 +4,7 @@ paper-confirmed: 论文网格搜索范围 k∈{3,5,7}, sigma_space∈[0.5,2.5] s
 sigma_range∈[10,30] step 5（共 45 组，diameter 模式）。
 
 流程：单帧（ROI 参考帧）→ 逐组合双边滤波 → 计算 SNR →
-写 outputs/metrics/grid_search.csv，取 SNR 最大组合与论文 (5,1.5,25) 对照。
+写 outputs/p2_grid_search/grid_search.csv，取 SNR 最大组合与论文 (5,1.5,25) 对照。
 另以 radius 核定义（k=5 → 11x11）跑同一 sigma_space x sigma_range 网格作对照，
 写 grid_search_radius.csv，辅助判断论文 k=5 的真实含义。
 
@@ -137,13 +137,13 @@ def main():
     parser.add_argument("--frame", default=None, help="FITS 文件名或绝对路径；默认取 ROI 参考帧")
     parser.add_argument("--crop-size", type=int, default=1024,
                         help="以 ROI 为中心的裁剪边长；0 表示全图")
-    parser.add_argument("--out", default=None, help="CSV 输出目录；默认 outputs/metrics")
+    parser.add_argument("--out", default=None, help="输出根目录；默认 outputs，CSV 写到其下 p2_grid_search/")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     roi = load_roi(cfg["data"]["roi_file"])
     frame_path = resolve_frame(cfg, roi, args.frame)
-    out_dir = Path(args.out) if args.out else Path(cfg["output"]["dir"]) / "metrics"
+    out_dir = Path(args.out or "outputs") / "p2_grid_search"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     image, stats = load_fits(str(frame_path))

@@ -31,3 +31,14 @@ def save_png(path, image):
         image = normalize_to_uint8(np.asarray(image, dtype=np.float32))
     cv2.imwrite(str(path), image)
     return str(path)
+
+
+def overlay_mask(image, binary, color=(0, 0, 255)):
+    """在灰度图的显示归一化结果上，用 color（BGR）标出前景像素。
+
+    engineering-choice: 仅用于 09_final.png 人工检查；返回 BGR uint8。
+    """
+    base = normalize_to_uint8(np.asarray(image, dtype=np.float32))
+    bgr = cv2.cvtColor(base, cv2.COLOR_GRAY2BGR)
+    bgr[np.asarray(binary) > 0] = color
+    return bgr

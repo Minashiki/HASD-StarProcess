@@ -5,7 +5,7 @@ import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-os.makedirs("outputs/debug", exist_ok=True)
+os.makedirs("outputs/p0_debug", exist_ok=True)
 warnings.filterwarnings("ignore")
 
 import matplotlib
@@ -38,8 +38,8 @@ for row, (name, (cx, cy, r)) in enumerate(regions.items()):
         ax.set_title(f"{name} ({cx},{cy})±{r} {ttl}")
         ax.axis("off")
 plt.tight_layout()
-plt.savefig("outputs/debug/p0_zoom.png", dpi=90)
-print("saved outputs/debug/p0_zoom.png")
+plt.savefig("outputs/p0_debug/p0_zoom.png", dpi=90)
+print("saved outputs/p0_debug/p0_zoom.png")
 
 # 条带区域精确坐标：frame1 条带内亮点质心
 crop = a[150:600, 1200:1700]

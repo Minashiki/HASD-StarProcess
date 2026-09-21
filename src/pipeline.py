@@ -1,13 +1,16 @@
-"""预处理流水线（P3：读图 → 双边滤波 → 对比度拉伸 → 局部背景建模 → SNR 评价）。
+"""预处理流水线（P4：读图 → 双边滤波 → 对比度拉伸 → 局部背景建模
+→ 自适应二值化 → 形态学 → SNR/检测指标评价）。
 
-按 implementation_plan 的 01–09 编号输出中间图，当前实现步骤：
-  01_original.png    原始帧（显示归一化）
-  02_bilateral.png   双边滤波结果（显示归一化）
-  03_stretch.png     min-max 对比度拉伸到 [0,255]
-  04_local_mean.png  20x20 块局部均值图 mu_loc
-  05_local_std.png   20x20 块局部标准差图 sigma_loc
-  06_S_map.png       显著性度量 S_map（论文公式 5）
-后续 P4 将追加 07 二值化 / 08 形态学 / 09 最终图。
+按 implementation_plan 的 01–09 编号输出中间图，按阶段落到子目录：
+  p1_bilateral/          01_original.png    原始帧（显示归一化）
+                         02_bilateral.png   双边滤波结果（显示归一化）
+  p3_stretch_background/ 03_stretch.png     min-max 对比度拉伸到 [0,255]
+                         04_local_mean.png  20x20 块局部均值图 mu_loc
+                         05_local_std.png   20x20 块局部标准差图 sigma_loc
+                         06_S_map.png       显著性度量 S_map（论文公式 5）
+  p4_binary_morphology/  07_binary.png      自适应二值化结果（reconstruction-assumption）
+                         08_morphology.png  形态学处理结果（reconstruction-assumption）
+                         09_final.png       最终前景掩膜叠加在拉伸图上的检测示意（BGR）
 
 所有 python 调用使用 conda run -n HASD-StarNet。
 """
@@ -18,12 +21,14 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from .adaptive_threshold import threshold_strategy
 from .bilateral_filter import bilateral_filter
 from .contrast_stretch import contrast_stretch
 from .image_io import load_fits
 from .local_background import local_background_model
-from .metrics import calculate_snr
-from .visualization import save_png
+from .metrics import calculate_snr, detection_metrics
+from .morphology import apply_morphology
+from .visualization import overlay_mask, save_png
 
 
 def load_config(config_path):
@@ -48,7 +53,7 @@ def resolve_frame(cfg, roi, frame=None):
 
 
 def process_frame(frame_path, cfg, roi):
-    """对单帧执行 P3 流水线，返回 (结果字典, 中间图像字典)。"""
+    """对单帧执行完整 P1–P4 流水线，返回 (结果字典, 中间图像字典)。"""
     image, stats = load_fits(str(frame_path))
 
     bcfg = cfg["bilateral"]
@@ -74,9 +79,30 @@ def process_frame(frame_path, cfg, roi):
     lbcfg = cfg.get("local_background", {})
     bg = local_background_model(stretched, block_size=lbcfg.get("block_size", 20))
 
+    tcfg = cfg.get("adaptive_threshold", {})
+    binary, t_map = threshold_strategy(
+        stretched,
+        bg["local_mean_map"],
+        bg["S_map"],
+        bg["local_std_map"],
+        strategy=tcfg.get("strategy", "mu+C*S"),
+        C=tcfg.get("C", 1.5),
+    )
+
+    mcfg = cfg.get("morphology", {})
+    morphed = apply_morphology(
+        binary,
+        op=mcfg.get("op", "open"),
+        kernel_shape=mcfg.get("kernel_shape", "ellipse"),
+        kernel_size=mcfg.get("kernel_size", 3),
+        iterations=mcfg.get("iterations", 1),
+    )
+
     snr_before = calculate_snr(image, roi["target"], roi["background_annulus"])
     snr_filtered = calculate_snr(filtered, roi["target"], roi["background_annulus"])
     snr_after = calculate_snr(stretched, roi["target"], roi["background_annulus"])
+    det_binary = detection_metrics(binary, stretched, roi["target"])
+    det_final = detection_metrics(morphed, stretched, roi["target"])
 
     result = {
         "frame": Path(frame_path).name,
@@ -86,9 +112,14 @@ def process_frame(frame_path, cfg, roi):
             "block_grid": bg["block_grid"],
             "global_std": bg["global_std"],
         },
+        "threshold": {"strategy": tcfg.get("strategy", "mu+C*S"),
+                      "C": tcfg.get("C", 1.5)},
+        "morphology": dict(mcfg),
         "snr_before": snr_before,
         "snr_filtered": snr_filtered,
         "snr_after": snr_after,
+        "det_binary": det_binary,
+        "det_final": det_final,
     }
     images = {
         "01_original": image,
@@ -97,6 +128,9 @@ def process_frame(frame_path, cfg, roi):
         "04_local_mean": bg["local_mean_map"],
         "05_local_std": bg["local_std_map"],
         "06_S_map": bg["S_map"],
+        "07_binary": binary,
+        "08_morphology": morphed,
+        "09_final": overlay_mask(stretched, morphed),
     }
     return result, images
 
@@ -113,7 +147,13 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None):
 
     result, images = process_frame(frame_path, cfg, roi)
     for name, img in images.items():
-        sub = "filtered" if "bilateral" in name else "debug"
+        stage = int(name.split("_")[0])
+        if stage <= 2:      # 01 原图、02 双边滤波
+            sub = "p1_bilateral"
+        elif stage <= 6:    # 03 拉伸、04-06 局部背景建模
+            sub = "p3_stretch_background"
+        else:               # 07 二值化、08 形态学、09 最终叠加
+            sub = "p4_binary_morphology"
         save_png(out_root / sub / f"{name}.png", img)
 
     print(f"frame: {result['frame']}")
@@ -136,12 +176,26 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None):
           f"bg_std={sa['background_std']:.2f})")
     gain = (sa["snr"] - sb["snr"]) / sb["snr"] * 100.0
     print(f"SNR gain (stretch vs original): {gain:+.2f}%")
+    th = result["threshold"]
+    print(f"threshold: strategy={th['strategy']}, C={th['C']}")
+    mo = result["morphology"]
+    print(f"morphology: op={mo.get('op', 'open')}, "
+          f"{mo.get('kernel_shape', 'ellipse')} "
+          f"{mo.get('kernel_size', 3)}x{mo.get('kernel_size', 3)}, "
+          f"iter={mo.get('iterations', 1)}")
+    for tag in ("det_binary", "det_final"):
+        d = result[tag]
+        print(f"{tag}: energy_retention={d['target_energy_retention']:.4f}, "
+              f"pixel_retention={d['target_pixel_retention']:.4f}, "
+              f"bg_noise_count={d['background_noise_count']}, "
+              f"foreground_pixels={d['foreground_pixels']}")
     return result
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="星图预处理流水线（P3：双边滤波 + 对比度拉伸 + 局部背景建模）"
+        description="星图预处理流水线（P4：双边滤波 + 对比度拉伸 + 局部背景建模"
+                    " + 自适应二值化 + 形态学）"
     )
     parser.add_argument("--config", default="config/paper.yaml")
     parser.add_argument("--frame", default=None, help="FITS 文件名或绝对路径；默认取 ROI 参考帧")

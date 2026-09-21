@@ -5,7 +5,7 @@ import warnings
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-os.makedirs("outputs/debug", exist_ok=True)
+os.makedirs("outputs/p0_debug", exist_ok=True)
 warnings.filterwarnings("ignore")
 
 import matplotlib
@@ -60,5 +60,5 @@ for i, (x, y, v, sd) in enumerate(cands[:n]):
         ax.set_title(f"#{i} ({x},{y}) {ttl} |d|={v:.0f}")
         ax.axis("off")
 plt.tight_layout()
-plt.savefig("outputs/debug/p0_candidates.png", dpi=70)
-print("saved outputs/debug/p0_candidates.png")
+plt.savefig("outputs/p0_debug/p0_candidates.png", dpi=70)
+print("saved outputs/p0_debug/p0_candidates.png")

@@ -40,4 +40,6 @@ morphology:
   iterations: 1
 
 output:
-  dir: outputs                    # engineering-choice
+  # engineering-choice: 输出根目录；其下按阶段生成 p1_bilateral/、
+  # p3_stretch_background/、p4_binary_morphology/ 子目录
+  dir: outputs
