@@ -39,8 +39,13 @@ conda run -n HASD-StarNet pip install -r requirements.txt
 
 ```bash
 conda run -n HASD-StarNet python scripts/run_preprocess.py --config config/paper.yaml
+conda run -n HASD-StarNet python scripts/grid_search_bilateral.py
 conda run -n HASD-StarNet python -m pytest tests/
 ```
+
+注意（engineering-choice）：Windows 下脚本输出含中文/希腊字母时，conda run 按 UTF-8
+解码子进程输出，需前置 `PYTHONUTF8=1 PYTHONIOENCODING=utf-8`，否则 conda 端
+GBK 打印报 UnicodeEncodeError。
 
 ## 进度
 
@@ -50,6 +55,20 @@ conda run -n HASD-StarNet python -m pytest tests/
   `src/visualization.py`、`src/pipeline.py` 骨架、`scripts/run_preprocess.py`。
   参考帧验收：SNR 17.61 → 43.37（+146.25%），目标均值 202.4 → 199.0（保留），
   背景 σ 10.31 → 4.11。输出 `outputs/debug/01_original.png`、`outputs/filtered/02_bilateral.png`。
+- **P2 网格搜索**（完成）：`scripts/grid_search_bilateral.py`，论文网格
+  k∈{3,5,7} × σs∈{0.5..2.5} × σr∈{10..30}（3×5×5=75 组，diameter 模式）
+  + radius 模式（k=5 → 11×11）25 组对照，单帧 ROI 中心 1024×1024 裁剪加速
+  （engineering-choice：σr_eff 按子图动态范围缩放，结论用于参数排序）。
+  输出 `outputs/metrics/grid_search.csv`、`grid_search_radius.csv`。
+  结果（SNR_before=17.61）：
+  - diameter：论文参数 (5, 1.5, 25) SNR=43.32（+145.93%）；网格最优 (7, 2.5, 30)
+    SNR=60.09（+241.17%），SNR 随 k/σs/σr 增大单调上升，最优落在网格边界。
+  - radius（k=5 → 11×11）：论文参数 SNR=59.07（+235.33%）；最优 (2.5, 30)
+    SNR=79.30（+350.21%），整体高于同参数 diameter。
+  - 结论：SNR 指标奖励背景平滑，网格最优顶到边界，不具区分度；论文 (5,1.5,25)
+    应理解为"足够平滑且保留目标"的折中。k=5 按 radius（11×11）解释时同参数
+    SNR 更高，但两种解释均无法仅凭 SNR 排除，留待 P5 四组实验结合目标能量
+    保留情况综合判断。
 
 显示归一化说明（engineering-choice）：PNG 落盘用 0.5%/99.5% 百分位拉伸
 （±32768 量级坏点会使全局 min-max 把星点压到不可见）；管线内数据不受影响。
