@@ -1,7 +1,9 @@
 """FITS 星图读取模块。
 
-paper-confirmed: rst19 数据为 BITPIX=16（有符号 int16, BZERO=0, BSCALE=1）、
+paper-confirmed: rst19 数据为 BITPIX=16（BZERO=0, BSCALE=1）、
 4096x4096、曝光 1500 ms、IMAGETYP=OBJECT。
+data-corrected: 相机实际输出为无符号 uint16，FITS 按 int16 存储导致负值；
+读取时对 int16 做按位重解释为 uint16（-32768→32768, -1→65535）。
 engineering-choice: 读取后内部统一转 float32，后续所有处理在 float32 上进行。
 """
 
@@ -17,7 +19,7 @@ class ImageStats:
 
     width: int
     height: int
-    dtype: str          # 原始 FITS 数据类型（如 int16）
+    dtype: str          # 重解释后的数据类型（如 uint16）
     min: float
     max: float
     mean: float
@@ -49,6 +51,8 @@ def _safe_header_dict(header):
 def load_fits(path):
     """读取一帧 FITS，返回 (float32 图像, ImageStats)。
 
+    data-corrected: BITPIX=16 且 BZERO=0 时，将 int16 按位重解释为 uint16
+    （相机原始数据为无符号），消除因错误按有符号读取产生的负值。
     engineering-choice: astropy 按 BZERO/BSCALE 应用缩放后数据即为物理值；
     这里直接取 primary HDU 数据并转 float32。
     engineering-choice: rst19 文件缺少 END 填充块（截断警告），
@@ -59,6 +63,9 @@ def load_fits(path):
         header = _safe_header_dict(hdul[0].header)
     if raw is None:
         raise ValueError(f"FITS 文件无图像数据: {path}")
+
+    if raw.dtype.kind == "i" and raw.dtype.itemsize == 2 and not header.get("BZERO"):
+        raw = raw.view(raw.dtype.str.replace("i", "u"))
 
     image = np.asarray(raw, dtype=np.float32)
     stats = ImageStats(

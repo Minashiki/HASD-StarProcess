@@ -15,7 +15,7 @@
 ### 数据核实（`rst19/`）
 
 - 15 帧 FITS 序列 + 1 份格式说明 docx。
-- FITS 头：BITPIX=16（有符号 int16，BZERO=0, BSCALE=1），4096×4096，曝光 1500 ms，IMAGETYP=OBJECT。
+- FITS 头：BITPIX=16（BZERO=0, BSCALE=1），4096×4096，曝光 1500 ms，IMAGETYP=OBJECT。相机数据实为 uint16，读取时将 int16 按位重解释为 uint16。
 - 读取用 `astropy.io.fits`，内部统一转 float32。
 
 ### 环境核实
@@ -70,7 +70,7 @@ outputs/                # 按阶段命名：p0_debug/ p1_bilateral/ p2_grid_sear
 ### P0 环境与工程
 
 - 安装依赖；建目录、`.gitignore`、`requirements.txt`、`README.md`（含三个不确定项与三分原则）、`config/paper.yaml`。
-- `src/image_io.py`：读取 FITS（astropy → float32），记录 stats（dtype=int16, 4096×4096, min/max/mean/std）。
+- `src/image_io.py`：读取 FITS（astropy，int16→uint16 按位重解释 → float32），记录 stats（dtype=uint16, 4096×4096, min/max/mean/std）。
 - 验收：能加载一帧并输出统计。
 - 可视化检查一帧，人工选取一个暗弱目标 ROI 写入 `data/roi/roi.yaml`（target x/y/radius + 背景环 inner/outer radius），供 SNR 计算；若无明显动目标，则选一颗中等亮度恒星作 SNR 参考 ROI，并在 README 注明。
 

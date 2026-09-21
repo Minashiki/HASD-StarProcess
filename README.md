@@ -27,8 +27,8 @@ conda run -n HASD-StarNet pip install -r requirements.txt
 
 ## 数据
 
-`rst19/`：15 帧 FITS 序列，BITPIX=16（有符号 int16），4096×4096，曝光 1500 ms，IMAGETYP=OBJECT。
-读取后内部统一转 float32。
+`rst19/`：15 帧 FITS 序列，BITPIX=16（相机 uint16 数据按 int16 存储），4096×4096，曝光 1500 ms，IMAGETYP=OBJECT。
+读取时将 int16 按位重解释为 uint16，之后内部统一转 float32。
 
 ## 目录结构
 
@@ -88,10 +88,10 @@ GBK 打印报 UnicodeEncodeError。
   输出 `03_stretch.png`、`04_local_mean.png`、`05_local_std.png`、`06_S_map.png`。
   参考帧验收：块网格 205×205，σglo=0.650；拉伸后 SNR=43.372 与滤波后
   43.374 一致（min-max 为线性变换，SNR 不变，浮点舍入内）。
-  注意（paper-faithful 后果）：rst19 存在 ±32768 量级坏点，全局 min-max
-  把有效信号压缩到很窄灰度区间（背景 σ 仅 0.02/255），S_map 仍能正常
-  分离星点块（见 `06_S_map.png`），后续 P4 阈值在此窄区间数据上按
-  相对统计量工作。
+  注意（paper-faithful 后果）：rst19 存在 0/65535 量级坏点（uint16 重解释后），
+  全局 min-max 把有效信号压缩到很窄灰度区间（背景 σ 仅 0.02/255），S_map
+  仍能正常分离星点块（见 `06_S_map.png`），后续 P4 阈值在此窄区间数据上按
+  相对统计量工作。（上述数值为 uint16 重解释修正前测得，重跑后可能变化。）
 - **P4 自适应二值化 + 形态学**（完成）：`src/adaptive_threshold.py`
   （三种候选策略 `mu+S` / `mu+C*S` / `mu+C*sigma_loc`，判决 image ≥ T，
   全部 reconstruction-assumption）、`src/morphology.py`
@@ -117,7 +117,7 @@ GBK 打印报 UnicodeEncodeError。
   故 S 系策略前景/噪点量级很大；`mu+C*sigma_loc` C=1.5 在与默认策略
   相同的能量保留率（0.213）下噪点数减半、前景像素减至 1/6。按 plan
   规定配置默认仍为 `mu+C*S`，最终策略留待 P5 四组实验综合判定。
-  噪点绝对量级（10⁴–10⁵）主要源于 ±32768 坏点经双边滤波保边残留
+  噪点绝对量级（10⁴–10⁵）主要源于 0/65535 坏点经双边滤波保边残留
   与背景 σ 被压缩至 0.02/255 的叠加效应。
 - **P5 SNR 评价与四组实验**（完成）：`scripts/evaluate_preprocess.py`
   （A 原图 / B 双边滤波 / C 完整 pipeline / D 滤波器对照）、

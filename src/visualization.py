@@ -13,9 +13,9 @@ import numpy as np
 def normalize_to_uint8(image, lo_pct=0.5, hi_pct=99.5):
     """百分位拉伸到 [0,255] uint8（仅用于图像落盘显示）。
 
-    engineering-choice: rst19 数据存在 ±32768 量级的坏点，全局 min-max 会把
-    星点压缩到不可见，故显示归一化用 0.5%/99.5% 百分位；管线内的对比度拉伸
-    （P3）仍按论文做 min-max，两者互不影响。
+    engineering-choice: rst19 数据存在 0/65535 量级的坏点（uint16 饱和/零值），
+    全局 min-max 会把星点压缩到不可见，故显示归一化用 0.5%/99.5% 百分位；
+    管线内的对比度拉伸（P3）仍按论文做 min-max，两者互不影响。
     """
     lo, hi = np.percentile(image, [lo_pct, hi_pct])
     if hi <= lo:
