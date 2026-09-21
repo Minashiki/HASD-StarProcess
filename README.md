@@ -69,6 +69,17 @@ GBK 打印报 UnicodeEncodeError。
     应理解为"足够平滑且保留目标"的折中。k=5 按 radius（11×11）解释时同参数
     SNR 更高，但两种解释均无法仅凭 SNR 排除，留待 P5 四组实验结合目标能量
     保留情况综合判断。
+- **P3 对比度拉伸 + 局部背景模型**（完成）：`src/contrast_stretch.py`
+  （paper-confirmed min-max → [0,255]）、`src/local_background.py`
+  （20×20 块统计 μloc/σloc 图、σglo，公式 (5) S_map，边缘残块按实际像素
+  统计，块图最近邻放大回原尺寸）。`src/pipeline.py` 串联 P1–P3，
+  输出 `03_stretch.png`、`04_local_mean.png`、`05_local_std.png`、`06_S_map.png`。
+  参考帧验收：块网格 205×205，σglo=0.650；拉伸后 SNR=43.372 与滤波后
+  43.374 一致（min-max 为线性变换，SNR 不变，浮点舍入内）。
+  注意（paper-faithful 后果）：rst19 存在 ±32768 量级坏点，全局 min-max
+  把有效信号压缩到很窄灰度区间（背景 σ 仅 0.02/255），S_map 仍能正常
+  分离星点块（见 `06_S_map.png`），后续 P4 阈值在此窄区间数据上按
+  相对统计量工作。
 
 显示归一化说明（engineering-choice）：PNG 落盘用 0.5%/99.5% 百分位拉伸
 （±32768 量级坏点会使全局 min-max 把星点压到不可见）；管线内数据不受影响。
