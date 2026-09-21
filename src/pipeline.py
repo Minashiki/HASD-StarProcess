@@ -4,7 +4,7 @@
 按 implementation_plan 的 01–09 编号输出中间图，按阶段落到子目录：
   p1_bilateral/          01_original.png    原始帧（显示归一化）
                          02_bilateral.png   双边滤波结果（显示归一化）
-  p3_stretch_background/ 03_stretch.png     min-max 对比度拉伸到 [0,255]
+  p3_stretch_background/ 03_stretch.png     对比度拉伸到 [0,255]（minmax/statistical）
                          04_local_mean.png  20x20 块局部均值图 mu_loc
                          05_local_std.png   20x20 块局部标准差图 sigma_loc
                          06_S_map.png       显著性度量 S_map（论文公式 5）
@@ -69,11 +69,28 @@ def process_frame(frame_path, cfg, roi):
     )
 
     ccfg = cfg.get("contrast_stretch", {})
+    stretch_method = ccfg.get("method", "minmax")
+    stretch_info = {"method": stretch_method}
+    stretch_kwargs = {}
+    if stretch_method == "statistical":
+        from .contrast_stretch import statistical_upper
+        tier = ccfg.get("tier", "balanced")
+        upper, median, sigma = statistical_upper(
+            filtered, tier,
+            percentile_tiers=ccfg.get("percentile_tiers"),
+            upper_k=ccfg.get("upper_k", 8.0),
+        )
+        stretch_info.update(tier=tier, upper=upper,
+                            background_median=median, background_sigma=sigma)
+        stretch_kwargs = dict(tier=tier,
+                              percentile_tiers=ccfg.get("percentile_tiers"),
+                              upper_k=ccfg.get("upper_k", 8.0))
     stretched = contrast_stretch(
         filtered,
         out_min=ccfg.get("out_min", 0),
         out_max=ccfg.get("out_max", 255),
-        method=ccfg.get("method", "minmax"),
+        method=stretch_method,
+        **stretch_kwargs,
     )
 
     lbcfg = cfg.get("local_background", {})
@@ -108,6 +125,7 @@ def process_frame(frame_path, cfg, roi):
         "frame": Path(frame_path).name,
         "stats": stats,
         "bilateral": binfo,
+        "contrast_stretch": stretch_info,
         "local_background": {
             "block_grid": bg["block_grid"],
             "global_std": bg["global_std"],
@@ -190,8 +208,13 @@ def run_batch(cfg, roi, out_root):
     return rows
 
 
-def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False):
+def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False,
+        stretch_method=None, stretch_tier=None):
     cfg = load_config(config_path)
+    if stretch_method is not None:
+        cfg.setdefault("contrast_stretch", {})["method"] = stretch_method
+    if stretch_tier is not None:
+        cfg.setdefault("contrast_stretch", {})["tier"] = stretch_tier
     roi_path = cfg["data"].get("roi_file")
     roi = load_roi(roi_path) if roi_path else None
     if roi is None:
@@ -213,6 +236,14 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False):
     print(f"stats: {result['stats']}")
     bi = result["bilateral"]
     print(f"bilateral: d={bi['d']}, sigma_r_eff={bi['sigma_r_eff']:.4f}")
+    cs = result["contrast_stretch"]
+    if cs["method"] == "statistical":
+        print(f"contrast_stretch: method=statistical, tier={cs['tier']}, "
+              f"upper={cs['upper']:.1f} "
+              f"(bg_median={cs['background_median']:.2f}, "
+              f"bg_sigma={cs['background_sigma']:.2f})")
+    else:
+        print(f"contrast_stretch: method={cs['method']}")
     lb = result["local_background"]
     print(f"local_background: block_grid={lb['block_grid']}, "
           f"global_std={lb['global_std']:.3f}")
@@ -255,8 +286,15 @@ def main():
     parser.add_argument("--out", default=None, help="输出根目录；默认取配置 output.dir")
     parser.add_argument("--batch", action="store_true",
                         help="批处理 fits_dir 全部帧（P5）；默认输出 output.dir/batch/")
+    parser.add_argument("--stretch-method", choices=["minmax", "statistical"],
+                        default=None,
+                        help="覆盖配置中的对比度拉伸方法")
+    parser.add_argument("--stretch-tier", choices=["recall", "balanced", "purity"],
+                        default=None,
+                        help="覆盖配置中的 statistical 拉伸百分位档位")
     args = parser.parse_args()
-    run(args.config, frame=args.frame, out_dir=args.out, batch=args.batch)
+    run(args.config, frame=args.frame, out_dir=args.out, batch=args.batch,
+        stretch_method=args.stretch_method, stretch_tier=args.stretch_tier)
 
 
 if __name__ == "__main__":

@@ -24,10 +24,18 @@ bilateral:
 
 # ===== P3 对比度拉伸 =====
 contrast_stretch:
-  # paper-confirmed: min-max 线性拉伸到 [0,255]
-  method: minmax
+  # paper-confirmed: min-max 线性拉伸到 [0,255]（论文方法）
+  # engineering-choice: statistical 按统计范围截断高端后再归一化（非论文方法）
+  method: minmax              # minmax | statistical
   out_min: 0
   out_max: 255
+  # engineering-choice: statistical 方法的参数，随时可调
+  tier: balanced              # 默认档位: recall | balanced | purity
+  percentile_tiers:           # 三档灰度百分位
+    recall: 99.5
+    balanced: 99.9
+    purity: 99.95
+  upper_k: 8                  # upper 下限保护: 背景中位数 + upper_k × MAD sigma
 
 # ===== P3 局部背景建模 =====
 local_background:
