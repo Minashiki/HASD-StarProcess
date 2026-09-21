@@ -135,26 +135,79 @@ def process_frame(frame_path, cfg, roi):
     return result, images
 
 
-def run(config_path="config/paper.yaml", frame=None, out_dir=None):
+def _stage_subdir(name):
+    """按 01–09 编号确定阶段子目录（见模块 docstring）。"""
+    stage = int(name.split("_")[0])
+    if stage <= 2:      # 01 原图、02 双边滤波
+        return "p1_bilateral"
+    if stage <= 6:      # 03 拉伸、04-06 局部背景建模
+        return "p3_stretch_background"
+    return "p4_binary_morphology"  # 07 二值化、08 形态学、09 最终叠加
+
+
+def _save_stage_images(out_root, images):
+    """把 01–09 系列图按阶段子目录落盘到 out_root。"""
+    for name, img in images.items():
+        save_png(Path(out_root) / _stage_subdir(name) / f"{name}.png", img)
+
+
+def run_batch(cfg, roi, out_root):
+    """P5 批处理：对 fits_dir 全部帧跑完整流水线并汇总指标。
+
+    engineering-choice: 每帧输出到 out_root/<帧名去扩展名>/ 下的阶段子目录；
+    汇总指标写 out_root/batch_metrics.csv（pandas）。
+    """
+    import pandas as pd
+
+    frames = sorted(Path(cfg["data"]["fits_dir"]).glob("*.fits"))
+    if not frames:
+        raise ValueError(f"批处理目录无 FITS 文件: {cfg['data']['fits_dir']}")
+    out_root = Path(out_root)
+    rows = []
+    for i, fp in enumerate(frames, 1):
+        result, images = process_frame(fp, cfg, roi)
+        _save_stage_images(out_root / fp.stem, images)
+        sb, sa = result["snr_before"], result["snr_after"]
+        det = result["det_final"]
+        rows.append({
+            "frame": result["frame"],
+            "snr_before": sb["snr"],
+            "snr_filtered": result["snr_filtered"]["snr"],
+            "snr_after": sa["snr"],
+            "snr_gain_percent": (sa["snr"] - sb["snr"]) / sb["snr"] * 100.0,
+            "target_energy_retention": det["target_energy_retention"],
+            "background_noise_count": det["background_noise_count"],
+            "foreground_pixels": det["foreground_pixels"],
+        })
+        print(f"[{i}/{len(frames)}] {result['frame']}: "
+              f"SNR {sb['snr']:.2f} -> {sa['snr']:.2f} "
+              f"({rows[-1]['snr_gain_percent']:+.1f}%), "
+              f"energy_retention={det['target_energy_retention']:.3f}, "
+              f"bg_noise={det['background_noise_count']}")
+    csv_path = out_root / "batch_metrics.csv"
+    pd.DataFrame(rows).to_csv(csv_path, index=False, float_format="%.4f")
+    print(f"saved: {csv_path}（{len(rows)} 帧）")
+    return rows
+
+
+def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False):
     cfg = load_config(config_path)
     roi_path = cfg["data"].get("roi_file")
     roi = load_roi(roi_path) if roi_path else None
     if roi is None:
         raise ValueError("P1 验收需要 ROI（SNR 计算），请在配置中指定 data.roi_file")
 
+    if batch:
+        # engineering-choice: 批处理默认写到 output.dir/batch/，避免与单帧
+        # 阶段目录混在一起；--out 可覆盖
+        out_root = Path(out_dir) if out_dir else Path(cfg["output"]["dir"]) / "batch"
+        return run_batch(cfg, roi, out_root)
+
     out_root = Path(out_dir or cfg["output"]["dir"])
     frame_path = resolve_frame(cfg, roi, frame)
 
     result, images = process_frame(frame_path, cfg, roi)
-    for name, img in images.items():
-        stage = int(name.split("_")[0])
-        if stage <= 2:      # 01 原图、02 双边滤波
-            sub = "p1_bilateral"
-        elif stage <= 6:    # 03 拉伸、04-06 局部背景建模
-            sub = "p3_stretch_background"
-        else:               # 07 二值化、08 形态学、09 最终叠加
-            sub = "p4_binary_morphology"
-        save_png(out_root / sub / f"{name}.png", img)
+    _save_stage_images(out_root, images)
 
     print(f"frame: {result['frame']}")
     print(f"stats: {result['stats']}")
@@ -200,8 +253,10 @@ def main():
     parser.add_argument("--config", default="config/paper.yaml")
     parser.add_argument("--frame", default=None, help="FITS 文件名或绝对路径；默认取 ROI 参考帧")
     parser.add_argument("--out", default=None, help="输出根目录；默认取配置 output.dir")
+    parser.add_argument("--batch", action="store_true",
+                        help="批处理 fits_dir 全部帧（P5）；默认输出 output.dir/batch/")
     args = parser.parse_args()
-    run(args.config, frame=args.frame, out_dir=args.out)
+    run(args.config, frame=args.frame, out_dir=args.out, batch=args.batch)
 
 
 if __name__ == "__main__":

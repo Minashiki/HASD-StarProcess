@@ -3,11 +3,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 *.egg-info/
+.venv/
 
 # Data & outputs (large)
 rst19/
 outputs/
 ref/
+
+# Logs / temp
+*.log
+*.tmp
 
 # IDE / OS
 .idea/

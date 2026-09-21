@@ -3,6 +3,7 @@
 
 用法：
     conda run -n HASD-StarNet python scripts/run_preprocess.py --config config/paper.yaml
+    conda run -n HASD-StarNet python scripts/run_preprocess.py --batch   # P5 全 15 帧批处理
 """
 
 import sys

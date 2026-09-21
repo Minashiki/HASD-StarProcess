@@ -37,15 +37,20 @@ conda run -n HASD-StarNet pip install -r requirements.txt
 
 `outputs/` 下按阶段命名子目录：`p0_debug/`（P0 选 ROI 辅助图）、
 `p1_bilateral/`（01–02）、`p3_stretch_background/`（03–06）、
-`p4_binary_morphology/`（07–09）、`p2_grid_search/`（P2 网格搜索 CSV）。
+`p4_binary_morphology/`（07–09）、`p2_grid_search/`（P2 网格搜索 CSV）、
+`p5_evaluation/`（P5 metrics.csv 与 comparison.png）。
 `--out` 指定自定义输出根目录（如 `outputs/test1`）时，其下也按同样的
-p 阶段子目录结构生成。
+p 阶段子目录结构生成。`--batch` 批处理默认写到 `outputs/batch/<帧名>/`
+（每帧一套 01–09 阶段子目录）并汇总 `outputs/batch/batch_metrics.csv`。
 
 ## 运行
 
 ```bash
 conda run -n HASD-StarNet python scripts/run_preprocess.py --config config/paper.yaml
-conda run -n HASD-StarNet python scripts/grid_search_bilateral.py
+conda run -n HASD-StarNet python scripts/run_preprocess.py --batch     # P5 全 15 帧批处理
+conda run -n HASD-StarNet python scripts/grid_search_bilateral.py      # P2 网格搜索
+conda run -n HASD-StarNet python scripts/evaluate_preprocess.py        # P5 四组实验
+conda run -n HASD-StarNet python scripts/compare_filters.py            # P5-D 滤波器对照（可独立运行）
 conda run -n HASD-StarNet python -m pytest tests/
 ```
 
@@ -114,6 +119,48 @@ GBK 打印报 UnicodeEncodeError。
   规定配置默认仍为 `mu+C*S`，最终策略留待 P5 四组实验综合判定。
   噪点绝对量级（10⁴–10⁵）主要源于 ±32768 坏点经双边滤波保边残留
   与背景 σ 被压缩至 0.02/255 的叠加效应。
+- **P5 SNR 评价与四组实验**（完成）：`scripts/evaluate_preprocess.py`
+  （A 原图 / B 双边滤波 / C 完整 pipeline / D 滤波器对照）、
+  `scripts/compare_filters.py`（D 组 mean/median/gaussian/bilateral 同空间
+  支持对照，可独立运行）。输出 `outputs/p5_evaluation/metrics.csv`
+  （image, method, snr_before, snr_after, snr_gain_percent, background_mean/std,
+  target_mean, runtime_ms + group/target_peak/energy_retention/
+  background_noise_count 判据辅助列）与 `comparison.png`（原图 + D 组四滤波
+  结果五图并排，标注 SNR）、`compare_filters.csv/.png`。
+  参考帧结果（SNR_before=17.61）：
+
+  | 组 | 方法 | SNR_after | 增益 | target_mean 保留率 | 峰值保留率(参考) |
+  |---|---|---|---|---|---|
+  | B | bilateral | 43.37 | +146.25% | 0.983 | 0.346 |
+  | C | pipeline_full | 43.37 | +146.24% | 能量保留率 0.213 | – |
+  | D | mean | 60.37 | +242.74% | 0.998 | 0.145 |
+  | D | median | 12.10 | −31.28% | 0.220（FAIL） | 0.035 |
+  | D | gaussian | 53.58 | +204.22% | 1.000 | 0.241 |
+
+  判据（plan P5：SNR_after > SNR_before 且目标峰值/局部能量未明显破坏；
+  engineering-choice：以 target_mean 保留率 ≥ 0.8 判"局部能量未破坏"，
+  单像素峰值对点源平滑天然敏感，仅作参考；overall 只就论文方法链路
+  B/C 判定）：**B/C PASS**。D 组结论：mean/gaussian 的 SNR 更高但纯属
+  "SNR 奖励背景平滑"（与 P2 网格搜索结论一致），其峰值涂抹远重于双边
+  滤波（峰值保留率 0.145/0.241 vs 0.346）；median 直接摧毁星点（PSF
+  小于 5×5 核，target_mean 跌至 0.22）。综合 SNR 增益与目标保持，双边
+  滤波为四者最优，印证论文选择；146% 的 SNR 增益与论文 93.37% 同量级
+  （plan 不硬性要求数值一致，ROI 与数据均不同）。
+- **P5 批处理**（完成）：`run_preprocess.py --batch` 对 rst19 全部 15 帧
+  跑完整流水线，每帧输出 01–09 图到 `outputs/batch/<帧名>/`，汇总
+  `outputs/batch/batch_metrics.csv`。15 帧 SNR 17.45–19.50 →
+  40.57–48.12（+124.7% ~ +154.6%），能量保留率 0.213–0.287，
+  背景噪点数 1.11×10⁵ ± 0.5%，帧间稳定。
+- **测试**（完成）：`tests/test_bilateral.py`（核定义、σr 缩放、常数图
+  不变、手工小矩阵对照、翻转对称性、阶跃边保边优于高斯）、
+  `tests/test_background.py`（块统计已知值、边缘残块、公式 (5) S_map、
+  σglo）、`tests/test_metrics.py`（合成图 SNR 已知值、σ_b=0 异常、
+  detection_metrics 合成场景），`pytest tests/` 14 项全部通过。
+  注意（engineering-choice）：实测 OpenCV 5.0 的 float32 bilateralFilter
+  与教科书公式存在最高约 5% 偏差（探针实验确认其颜色权重形状、翻转
+  对称性与保边行为均正常，疑似快速 exp 近似/权重截断），手工对照
+  测试以 5% 容差防止实现层 gross error；管线有效性由 P1/P2/P5 的
+  SNR 与目标保持实测保证。
 
 显示归一化说明（engineering-choice）：PNG 落盘用 0.5%/99.5% 百分位拉伸
 （±32768 量级坏点会使全局 min-max 把星点压到不可见）；管线内数据不受影响。
