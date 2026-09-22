@@ -21,13 +21,15 @@ bilateral:
 
 # ===== P3 对比度拉伸 =====
 contrast_stretch:
-  # paper-confirmed: min-max 线性拉伸到 [0,255]（论文方法）
-  # engineering-choice: statistical 按统计范围截断高端后再归一化（非论文方法）
+  # paper-confirmed: min-max 线性拉伸到 [0,255]
+  # engineering-choice: statistical 按统计范围截断高端后再归一化
   method: minmax              # minmax | statistical
   out_min: 0
   out_max: 255
   # engineering-choice: statistical 方法的参数，随时可调
   tier: balanced              # 默认档位: recall | balanced | purity
+  norm: false                  # true: 截断后归一化到 [out_min, out_max]；
+                              # false: 只做高端截断，保留原始灰度量级
   percentile_tiers:           # 三档灰度百分位
     recall: 99.5
     balanced: 99.9
@@ -41,9 +43,12 @@ local_background:
 
 # ===== P4 自适应二值化 =====
 adaptive_threshold:
-  # 候选: "mu+S" | "mu+C*S" | "mu+C*sigma_loc"
-  strategy: mu+C*S
-  C: 22 #todo 我认为这个参数不能统一设置，可以考虑直接用nn网络代替，用强化学习训练，人工标注几颗星点，强化学习训练保证这几颗星点位置保留”
+  # 参数化策略候选（二次开发）: "C1mu+C2*S" | "C1mu+C2*sigma_loc"
+  #   即 T = C_1 * mu_loc + C_2 * S（或 sigma_loc），C_1 / C_2 独立可调，
+  #   取 C_1: 1 时退化为对应的固定策略
+  strategy: C1mu+C2*S
+  C_1: 1                      # 参数化策略中 mu_loc 的系数
+  C_2: 2                      # 参数化策略中 S / sigma_loc 的系数
 
 # ===== P4 形态学处理 =====
 morphology:
@@ -56,3 +61,6 @@ output:
   # engineering-choice: 输出根目录；其下按阶段生成 p1_bilateral/、
   # p3_stretch_background/、p4_binary_morphology/ 子目录
   dir: outputs
+  # engineering-choice: true 时除 PNG 外额外保存同名 .fits，
+  # 数值/dtype 与管线中的数组一致（float32/uint8，不做显示归一化）
+  save_fits: true

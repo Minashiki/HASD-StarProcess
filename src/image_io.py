@@ -8,6 +8,7 @@ engineering-choice: 读取后内部统一转 float32，后续所有处理在 flo
 """
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
@@ -79,6 +80,19 @@ def load_fits(path):
         header=header,
     )
     return image, stats
+
+
+def save_fits(path, image):
+    """把管线中的数组原样写入 FITS（自动建目录）。返回路径字符串。
+
+    engineering-choice: dtype 与数值完全保留（float32 中间结果写 BITPIX=-32，
+    uint8 二值图写 BITPIX=8），不做任何归一化/拉伸，供后续直接用数值复核；
+    与 save_png 的显示归一化互不影响。
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fits.writeto(path, np.asarray(image), overwrite=True)
+    return str(path)
 
 
 if __name__ == "__main__":

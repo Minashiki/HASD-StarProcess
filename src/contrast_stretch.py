@@ -14,6 +14,10 @@ engineering-choice: 新增 statistical 方法（非论文方法，供对照实�
 其中背景水平与噪声用 MAD（中位数绝对偏差）从输入图像（即 P1 双边滤波
 结果）估计；大于 upper 的像素截断为 upper，再 min-max 归一化到
 [out_min, out_max]。百分位档位（recall/balanced/purity）在配置中可调。
+
+engineering-choice: statistical 方法支持 norm 开关（二次开发）：
+norm=False 时只做高端截断、不做归一化，输出保持输入灰度量级
+（截断后最大值 = upper），out_min/out_max 不生效。
 """
 
 import numpy as np
@@ -60,12 +64,14 @@ def statistical_upper(image, tier="balanced", percentile_tiers=None, upper_k=8.0
 
 
 def contrast_stretch(image, out_min=0.0, out_max=255.0, method="minmax",
-                     tier="balanced", percentile_tiers=None, upper_k=8.0):
+                     tier="balanced", percentile_tiers=None, upper_k=8.0,
+                     norm=True):
     """对比度拉伸到 [out_min, out_max]，返回 float32。
 
     paper-confirmed: method="minmax" 为论文方法（全局 min-max 线性拉伸）。
     engineering-choice: method="statistical" 时先按 statistical_upper 截断
-    高端灰度，再做 min-max 归一化，避免坏点主导动态范围。
+    高端灰度，再做 min-max 归一化，避免坏点主导动态范围；norm=False 时
+    只做截断不做归一化，保留输入灰度量级（此时 out_min/out_max 不生效）。
     """
     img = np.asarray(image, dtype=np.float32)
     if method == "minmax":
@@ -73,6 +79,8 @@ def contrast_stretch(image, out_min=0.0, out_max=255.0, method="minmax",
     elif method == "statistical":
         upper, _, _ = statistical_upper(img, tier, percentile_tiers, upper_k)
         img = np.minimum(img, np.float32(upper))
+        if not norm:
+            return img.astype(np.float32)
         lo, hi = float(img.min()), float(upper)
     else:
         raise ValueError(f"未知拉伸方法: {method}（可选: minmax | statistical）")

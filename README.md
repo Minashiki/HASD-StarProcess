@@ -46,7 +46,7 @@ p 阶段子目录结构生成。`--batch` 批处理默认写到 `outputs/batch/<
 ## 运行
 
 ```bash
-conda run -n HASD-StarNet python scripts/run_preprocess.py --config config/paper.yaml
+conda run -n HASD-StarNet python scripts/run_preprocess.py --config config/paper.yaml --out "" --stretch-method statistical --stretch-tier balanced
 conda run -n HASD-StarNet python scripts/run_preprocess.py --batch     # P5 全 15 帧批处理
 conda run -n HASD-StarNet python scripts/grid_search_bilateral.py      # P2 网格搜索
 conda run -n HASD-StarNet python scripts/evaluate_preprocess.py        # P5 四组实验

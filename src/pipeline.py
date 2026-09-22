@@ -24,7 +24,7 @@ import yaml
 from .adaptive_threshold import threshold_strategy
 from .bilateral_filter import bilateral_filter
 from .contrast_stretch import contrast_stretch
-from .image_io import load_fits
+from .image_io import load_fits, save_fits
 from .local_background import local_background_model
 from .metrics import calculate_snr, detection_metrics
 from .morphology import apply_morphology
@@ -81,10 +81,12 @@ def process_frame(frame_path, cfg, roi):
             upper_k=ccfg.get("upper_k", 8.0),
         )
         stretch_info.update(tier=tier, upper=upper,
-                            background_median=median, background_sigma=sigma)
+                            background_median=median, background_sigma=sigma,
+                            norm=ccfg.get("norm", True))
         stretch_kwargs = dict(tier=tier,
                               percentile_tiers=ccfg.get("percentile_tiers"),
-                              upper_k=ccfg.get("upper_k", 8.0))
+                              upper_k=ccfg.get("upper_k", 8.0),
+                              norm=ccfg.get("norm", True))
     stretched = contrast_stretch(
         filtered,
         out_min=ccfg.get("out_min", 0),
@@ -104,6 +106,8 @@ def process_frame(frame_path, cfg, roi):
         bg["local_std_map"],
         strategy=tcfg.get("strategy", "mu+C*S"),
         C=tcfg.get("C", 1.5),
+        C1=tcfg.get("C_1", 1.0),
+        C2=tcfg.get("C_2", 1.0),
     )
 
     mcfg = cfg.get("morphology", {})
@@ -131,7 +135,9 @@ def process_frame(frame_path, cfg, roi):
             "global_std": bg["global_std"],
         },
         "threshold": {"strategy": tcfg.get("strategy", "mu+C*S"),
-                      "C": tcfg.get("C", 1.5)},
+                      "C": tcfg.get("C", 1.5),
+                      "C_1": tcfg.get("C_1", 1.0),
+                      "C_2": tcfg.get("C_2", 1.0)},
         "morphology": dict(mcfg),
         "snr_before": snr_before,
         "snr_filtered": snr_filtered,
@@ -163,10 +169,17 @@ def _stage_subdir(name):
     return "p4_binary_morphology"  # 07 二值化、08 形态学、09 最终叠加
 
 
-def _save_stage_images(out_root, images):
-    """把 01–09 系列图按阶段子目录落盘到 out_root。"""
+def _save_stage_images(out_root, images, save_stage_fits=False):
+    """把 01–09 系列图按阶段子目录落盘到 out_root。
+
+    PNG 始终保存（显示归一化，仅供人工检查）；save_stage_fits=True 时
+    额外写同名 .fits，数值/ dtype 与管线中的数组完全一致。
+    """
     for name, img in images.items():
-        save_png(Path(out_root) / _stage_subdir(name) / f"{name}.png", img)
+        stage_dir = Path(out_root) / _stage_subdir(name)
+        save_png(stage_dir / f"{name}.png", img)
+        if save_stage_fits:
+            save_fits(stage_dir / f"{name}.fits", img)
 
 
 def run_batch(cfg, roi, out_root):
@@ -184,7 +197,8 @@ def run_batch(cfg, roi, out_root):
     rows = []
     for i, fp in enumerate(frames, 1):
         result, images = process_frame(fp, cfg, roi)
-        _save_stage_images(out_root / fp.stem, images)
+        _save_stage_images(out_root / fp.stem, images,
+                           save_stage_fits=cfg["output"].get("save_fits", False))
         sb, sa = result["snr_before"], result["snr_after"]
         det = result["det_final"]
         rows.append({
@@ -230,7 +244,8 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False,
     frame_path = resolve_frame(cfg, roi, frame)
 
     result, images = process_frame(frame_path, cfg, roi)
-    _save_stage_images(out_root, images)
+    _save_stage_images(out_root, images,
+                       save_stage_fits=cfg["output"].get("save_fits", False))
 
     print(f"frame: {result['frame']}")
     print(f"stats: {result['stats']}")
@@ -239,7 +254,7 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False,
     cs = result["contrast_stretch"]
     if cs["method"] == "statistical":
         print(f"contrast_stretch: method=statistical, tier={cs['tier']}, "
-              f"upper={cs['upper']:.1f} "
+              f"upper={cs['upper']:.1f}, norm={cs['norm']} "
               f"(bg_median={cs['background_median']:.2f}, "
               f"bg_sigma={cs['background_sigma']:.2f})")
     else:
@@ -261,7 +276,11 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False,
     gain = (sa["snr"] - sb["snr"]) / sb["snr"] * 100.0
     print(f"SNR gain (stretch vs original): {gain:+.2f}%")
     th = result["threshold"]
-    print(f"threshold: strategy={th['strategy']}, C={th['C']}")
+    if th["strategy"].startswith("C1mu"):
+        print(f"threshold: strategy={th['strategy']}, "
+              f"C_1={th['C_1']}, C_2={th['C_2']}")
+    else:
+        print(f"threshold: strategy={th['strategy']}, C={th['C']}")
     mo = result["morphology"]
     print(f"morphology: op={mo.get('op', 'open')}, "
           f"{mo.get('kernel_shape', 'ellipse')} "
