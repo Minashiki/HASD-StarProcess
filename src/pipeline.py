@@ -87,6 +87,13 @@ def process_frame(frame_path, cfg, roi):
                               percentile_tiers=ccfg.get("percentile_tiers"),
                               upper_k=ccfg.get("upper_k", 8.0),
                               norm=ccfg.get("norm", True))
+    elif stretch_method == "manual":
+        if "manual_upper" not in ccfg:
+            raise ValueError("contrast_stretch.method=manual 需要配置 manual_upper")
+        stretch_info.update(manual_upper=ccfg["manual_upper"],
+                            norm=ccfg.get("norm", True))
+        stretch_kwargs = dict(manual_upper=ccfg["manual_upper"],
+                              norm=ccfg.get("norm", True))
     stretched = contrast_stretch(
         filtered,
         out_min=ccfg.get("out_min", 0),
@@ -257,6 +264,9 @@ def run(config_path="config/paper.yaml", frame=None, out_dir=None, batch=False,
               f"upper={cs['upper']:.1f}, norm={cs['norm']} "
               f"(bg_median={cs['background_median']:.2f}, "
               f"bg_sigma={cs['background_sigma']:.2f})")
+    elif cs["method"] == "manual":
+        print(f"contrast_stretch: method=manual, "
+              f"manual_upper={cs['manual_upper']}, norm={cs['norm']}")
     else:
         print(f"contrast_stretch: method={cs['method']}")
     lb = result["local_background"]
@@ -305,7 +315,7 @@ def main():
     parser.add_argument("--out", default=None, help="输出根目录；默认取配置 output.dir")
     parser.add_argument("--batch", action="store_true",
                         help="批处理 fits_dir 全部帧（P5）；默认输出 output.dir/batch/")
-    parser.add_argument("--stretch-method", choices=["minmax", "statistical"],
+    parser.add_argument("--stretch-method", choices=["minmax", "statistical", "manual"],
                         default=None,
                         help="覆盖配置中的对比度拉伸方法")
     parser.add_argument("--stretch-tier", choices=["recall", "balanced", "purity"],

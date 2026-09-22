@@ -18,6 +18,12 @@ engineering-choice: 新增 statistical 方法（非论文方法，供对照实�
 engineering-choice: statistical 方法支持 norm 开关（二次开发）：
 norm=False 时只做高端截断、不做归一化，输出保持输入灰度量级
 （截断后最大值 = upper），out_min/out_max 不生效。
+
+engineering-choice: 新增 manual 方法（二次开发，灰度削峰）：
+直接指定 manual_upper，高于它的像素截断为 manual_upper；
+norm=True 时再 min-max 归一化到 [out_min, out_max]，norm=False 时
+只截断、保留输入灰量级。与 statistical 的区别是上限由人工指定，
+不做任何统计估计。
 """
 
 import numpy as np
@@ -65,13 +71,15 @@ def statistical_upper(image, tier="balanced", percentile_tiers=None, upper_k=8.0
 
 def contrast_stretch(image, out_min=0.0, out_max=255.0, method="minmax",
                      tier="balanced", percentile_tiers=None, upper_k=8.0,
-                     norm=True):
+                     norm=True, manual_upper=None):
     """对比度拉伸到 [out_min, out_max]，返回 float32。
 
     paper-confirmed: method="minmax" 为论文方法（全局 min-max 线性拉伸）。
     engineering-choice: method="statistical" 时先按 statistical_upper 截断
     高端灰度，再做 min-max 归一化，避免坏点主导动态范围；norm=False 时
     只做截断不做归一化，保留输入灰度量级（此时 out_min/out_max 不生效）。
+    engineering-choice: method="manual" 为灰度削峰，截断上限由 manual_upper
+    直接指定；norm 开关语义同 statistical。
     """
     img = np.asarray(image, dtype=np.float32)
     if method == "minmax":
@@ -82,8 +90,16 @@ def contrast_stretch(image, out_min=0.0, out_max=255.0, method="minmax",
         if not norm:
             return img.astype(np.float32)
         lo, hi = float(img.min()), float(upper)
+    elif method == "manual":
+        if manual_upper is None:
+            raise ValueError("method='manual' 需要指定 manual_upper")
+        img = np.minimum(img, np.float32(manual_upper))
+        if not norm:
+            return img.astype(np.float32)
+        lo, hi = float(img.min()), float(manual_upper)
     else:
-        raise ValueError(f"未知拉伸方法: {method}（可选: minmax | statistical）")
+        raise ValueError(
+            f"未知拉伸方法: {method}（可选: minmax | statistical | manual）")
     if hi <= lo:
         return np.full(img.shape, float(out_min), dtype=np.float32)
     out = (img - lo) / (hi - lo) * (float(out_max) - float(out_min)) + float(out_min)

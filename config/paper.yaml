@@ -23,15 +23,19 @@ bilateral:
 contrast_stretch:
   # paper-confirmed: min-max 线性拉伸到 [0,255]
   # engineering-choice: statistical 按统计范围截断高端后再归一化
-  method: minmax              # minmax | statistical
+  # engineering-choice: manual 灰度削峰，上限由 manual_upper 直接指定
+  method: minmax              # minmax | statistical | manual
   out_min: 0
   out_max: 255
+  # engineering-choice: manual 方法的削峰上限（原始灰度量级）
+  manual_upper: 500
   # engineering-choice: statistical 方法的参数，随时可调
-  tier: balanced              # 默认档位: recall | balanced | purity
-  norm: false                  # true: 截断后归一化到 [out_min, out_max]；
-                              # false: 只做高端截断，保留原始灰度量级
+  tier: recall              # 默认档位: recall | balanced | purity
+  norm: false                  # statistical/manual 共用。true: 截断后归一化
+                              # 到 [out_min, out_max]；false: 只做高端截断，
+                              # 保留原始灰度量级
   percentile_tiers:           # 三档灰度百分位
-    recall: 99.5
+    recall: 90.0
     balanced: 99.9
     purity: 99.95
   upper_k: 8                  # upper 下限保护: 背景中位数 + upper_k × MAD sigma
@@ -47,8 +51,8 @@ adaptive_threshold:
   #   即 T = C_1 * mu_loc + C_2 * S（或 sigma_loc），C_1 / C_2 独立可调，
   #   取 C_1: 1 时退化为对应的固定策略
   strategy: C1mu+C2*S
-  C_1: 1                      # 参数化策略中 mu_loc 的系数
-  C_2: 2                      # 参数化策略中 S / sigma_loc 的系数
+  C_1: 1.68                      # 参数化策略中 mu_loc 的系数
+  C_2: 1                      # 参数化策略中 S / sigma_loc 的系数
 
 # ===== P4 形态学处理 =====
 morphology:
